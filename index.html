@@ -56,7 +56,22 @@
             padding: 16px;
             gap: 12px;
         }
-        .left-panel h2 { font-size: 14px; color: #e94560; text-transform: uppercase; letter-spacing: 1px; }
+        .left-panel h2 {
+            font-size: 14px;
+            color: #e94560;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .total-token-count {
+            font-size: 11px;
+            color: #666;
+            font-weight: 400;
+            text-transform: none;
+            letter-spacing: 0;
+        }
         .prompt-section { display: flex; flex-direction: column; gap: 4px; flex: 1; min-height: 0; }
         .prompt-section label {
             font-size: 11px;
@@ -283,7 +298,7 @@
 <div class="main">
     <!-- Left panel: system prompt + params -->
     <div class="left-panel">
-        <h2>System Prompt</h2>
+        <h2>System Prompt <span class="total-token-count" id="total-token-count">Total: 0 tokens</span></h2>
 
         <div class="saved-prompts">
             <select id="saved-prompts-select">
@@ -603,9 +618,13 @@
     }
 
     function updateTokenCounts() {
-        document.getElementById('token-count-1').textContent = estimateTokens(systemPrompt1.value) + ' tokens';
-        document.getElementById('token-count-2').textContent = estimateTokens(systemPrompt2.value) + ' tokens';
-        document.getElementById('token-count-3').textContent = estimateTokens(systemPrompt3.value) + ' tokens';
+        const t1 = estimateTokens(systemPrompt1.value);
+        const t2 = estimateTokens(systemPrompt2.value);
+        const t3 = estimateTokens(systemPrompt3.value);
+        document.getElementById('token-count-1').textContent = t1 + ' tokens';
+        document.getElementById('token-count-2').textContent = t2 + ' tokens';
+        document.getElementById('token-count-3').textContent = t3 + ' tokens';
+        document.getElementById('total-token-count').textContent = 'Total: ' + (t1 + t2 + t3) + ' tokens';
     }
 
     systemPrompt1.addEventListener('input', updateTokenCounts);
