@@ -111,9 +111,20 @@
             gap: 10px;
         }
         .param-group { display: flex; flex-direction: column; gap: 4px; }
-        .param-group label { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.5px; }
+        .param-group label { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.5px; display: flex; justify-content: space-between; align-items: center; }
         .param-group input[type="range"] { width: 100%; accent-color: #e94560; }
-        .param-value { font-size: 12px; color: #e94560; text-align: right; }
+        .param-input {
+            width: 60px;
+            background: #1a1a2e;
+            border: 1px solid #0f3460;
+            color: #e94560;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+            text-align: right;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+        .param-input:focus { outline: none; border-color: #e94560; }
 
         /* Saved prompts */
         .saved-prompts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -325,19 +336,23 @@
 
         <div class="params">
             <div class="param-group">
-                <label>Temperature <span class="param-value" id="temp-val">0.7</span></label>
+                <label>Temperature <input type="text" class="param-input" id="temp-val" value="0.7"></label>
                 <input type="range" id="temperature" min="0" max="2" step="0.05" value="0.7">
             </div>
             <div class="param-group">
-                <label>Max Tokens <span class="param-value" id="tokens-val">1024</span></label>
-                <input type="range" id="max-tokens" min="64" max="125000" step="64" value="1024">
+                <label>Output Tokens <input type="text" class="param-input" id="tokens-val" value="16384"></label>
+                <input type="range" id="max-tokens" min="64" max="16384" step="64" value="16384">
             </div>
             <div class="param-group">
-                <label>Top P <span class="param-value" id="topp-val">0.9</span></label>
+                <label>Input Tokens <input type="text" class="param-input" id="input-tokens-val" value="128000"></label>
+                <input type="range" id="max-input-tokens" min="1000" max="128000" step="1000" value="128000">
+            </div>
+            <div class="param-group">
+                <label>Top P <input type="text" class="param-input" id="topp-val" value="0.9"></label>
                 <input type="range" id="top-p" min="0" max="1" step="0.05" value="0.9">
             </div>
             <div class="param-group">
-                <label>Freq Penalty <span class="param-value" id="freq-val">0</span></label>
+                <label>Freq Penalty <input type="text" class="param-input" id="freq-val" value="0"></label>
                 <input type="range" id="freq-penalty" min="0" max="2" step="0.1" value="0">
             </div>
         </div>
@@ -404,11 +419,26 @@
         return modelSelect.value === '__custom__' ? customModelInput.value.trim() : modelSelect.value;
     }
 
-    // ---- Sliders ----
-    tempSlider.addEventListener('input', () => document.getElementById('temp-val').textContent = tempSlider.value);
-    tokensSlider.addEventListener('input', () => document.getElementById('tokens-val').textContent = tokensSlider.value);
-    topPSlider.addEventListener('input', () => document.getElementById('topp-val').textContent = topPSlider.value);
-    freqSlider.addEventListener('input', () => document.getElementById('freq-val').textContent = freqSlider.value);
+    // ---- Sliders + text inputs (two-way sync) ----
+    const inputTokensSlider = document.getElementById('max-input-tokens');
+
+    function linkSliderAndInput(slider, input) {
+        slider.addEventListener('input', () => { input.value = slider.value; });
+        input.addEventListener('change', () => {
+            let v = parseFloat(input.value);
+            const min = parseFloat(slider.min), max = parseFloat(slider.max);
+            if (isNaN(v)) v = parseFloat(slider.value);
+            v = Math.max(min, Math.min(max, v));
+            input.value = v;
+            slider.value = v;
+        });
+    }
+
+    linkSliderAndInput(tempSlider, document.getElementById('temp-val'));
+    linkSliderAndInput(tokensSlider, document.getElementById('tokens-val'));
+    linkSliderAndInput(inputTokensSlider, document.getElementById('input-tokens-val'));
+    linkSliderAndInput(topPSlider, document.getElementById('topp-val'));
+    linkSliderAndInput(freqSlider, document.getElementById('freq-val'));
 
     // ---- Saved prompts ----
     function getSavedPrompts() {
@@ -502,13 +532,24 @@
         userInput.value = '';
         userInput.style.height = 'auto';
 
-        // Build messages array
+        // Build messages array, trimming older messages if over input token limit
         const messages = [];
         const sysPrompt = getSystemPrompt();
         if (sysPrompt) {
             messages.push({ role: 'system', content: sysPrompt });
         }
-        messages.push(...conversationHistory);
+        const maxInputTokens = parseInt(document.getElementById('input-tokens-val').value) || 128000;
+        const sysTokens = sysPrompt ? estimateTokens(sysPrompt) : 0;
+        let budget = maxInputTokens - sysTokens;
+        // Add conversation messages newest-first until we run out of budget
+        const trimmed = [];
+        for (let i = conversationHistory.length - 1; i >= 0; i--) {
+            const msgTokens = estimateTokens(conversationHistory[i].content);
+            if (budget - msgTokens < 0 && trimmed.length > 0) break;
+            budget -= msgTokens;
+            trimmed.unshift(conversationHistory[i]);
+        }
+        messages.push(...trimmed);
 
         // UI state
         isStreaming = true;
